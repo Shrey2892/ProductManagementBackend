@@ -20,11 +20,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 // -------------------- MySQL (EF Core) --------------------
+//builder.Services.AddDbContext<AppDbContext>(options =>
+//{
+//    options.UseMySql(
+//        builder.Configuration.GetConnectionString("DefaultConnection"),
+//        new MySqlServerVersion(new Version(8, 0, 36))
+//    );
+//});
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     options.UseMySql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        new MySqlServerVersion(new Version(8, 0, 36))
+        connectionString,
+        ServerVersion.AutoDetect(connectionString),
+        mySqlOptions => mySqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null
+        )
     );
 });
 
@@ -65,7 +78,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AngularPolicy", policy =>
     {
         policy
-            .WithOrigins("http://localhost:4200")
+            .WithOrigins("http://localhost:4200", "http://productmanagement-fl4qk05a2-shreyanair2892-5334s-projects.vercel.app/")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -123,11 +136,10 @@ var app = builder.Build();
 //////////////////////////////////////////////////////
 // 3️⃣ MIDDLEWARE PIPELINE (ORDER MATTERS!)
 //////////////////////////////////////////////////////
-if (app.Environment.IsDevelopment())
-{
+
     app.UseSwagger();
     app.UseSwaggerUI();
-}
+
 
 app.UseHttpsRedirection();
 
@@ -147,4 +159,10 @@ app.MapControllers();
 //////////////////////////////////////////////////////
 // 4️⃣ RUN
 //////////////////////////////////////////////////////
+//
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 app.Run();
