@@ -29,14 +29,22 @@ builder.Services.AddControllers();
 //});
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
+    //var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    //options.UseMySql(
+    //    connectionString,
+    //    ServerVersion.AutoDetect(connectionString),
+    //    mySqlOptions => mySqlOptions.EnableRetryOnFailure(
+    //        maxRetryCount: 5,
+    //        maxRetryDelay: TimeSpan.FromSeconds(30),
+    //        errorNumbersToAdd: null
+    //    )
+    //);
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    options.UseMySql(
-        connectionString,
-        ServerVersion.AutoDetect(connectionString),
-        mySqlOptions => mySqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 5,
-            maxRetryDelay: TimeSpan.FromSeconds(30),
-            errorNumbersToAdd: null
+
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseMySql(
+            connectionString,
+            new MySqlServerVersion(new Version(8, 0, 36))
         )
     );
 });
