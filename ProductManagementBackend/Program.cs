@@ -5,9 +5,6 @@ using Microsoft.OpenApi.Models;
 using ProductManagementBackend.Data;
 using ProductManagementBackend.Services;
 using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,38 +16,21 @@ var builder = WebApplication.CreateBuilder(args);
 // Controllers
 builder.Services.AddControllers();
 
+
 // -------------------- MySQL (EF Core) --------------------
-//builder.Services.AddDbContext<AppDbContext>(options =>
-//{
-//    options.UseMySql(
-//        builder.Configuration.GetConnectionString("DefaultConnection"),
-//        new MySqlServerVersion(new Version(8, 0, 36))
-//    );
-//});
+var connectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    //var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    //options.UseMySql(
-    //    connectionString,
-    //    ServerVersion.AutoDetect(connectionString),
-    //    mySqlOptions => mySqlOptions.EnableRetryOnFailure(
-    //        maxRetryCount: 5,
-    //        maxRetryDelay: TimeSpan.FromSeconds(30),
-    //        errorNumbersToAdd: null
-    //    )
-    //);
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
-    builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseMySql(
-            connectionString,
-            new MySqlServerVersion(new Version(8, 0, 36))
-        )
+    options.UseMySql(
+        connectionString,
+        new MySqlServerVersion(new Version(8, 0, 36))
     );
 });
 
-// -------------------- JWT --------------------
 
+// -------------------- JWT --------------------
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -63,34 +43,36 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
 
-            ValidIssuer = jwtSettings["Issuer"]!,
-            ValidAudience = jwtSettings["Audience"]!,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(jwtSettings["Key"]!)
             ),
 
-            // ✅ THIS IS CRITICAL
             NameClaimType = ClaimTypes.Name,
             RoleClaimType = ClaimTypes.Role,
-
             ClockSkew = TimeSpan.Zero
         };
     });
 
-
 builder.Services.AddAuthorization();
 
-// -------------------- CORS (Angular) --------------------
+
+// -------------------- CORS --------------------
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AngularPolicy", policy =>
     {
         policy
-            .WithOrigins("http://localhost:4200", "http://productmanagement-fl4qk05a2-shreyanair2892-5334s-projects.vercel.app/")
+            .WithOrigins(
+                "http://localhost:4200",
+                "https://productmanagement-fl4qk05a2-shreyanair2892-5334s-projects.vercel.app"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
 });
+
 
 // -------------------- Swagger --------------------
 builder.Services.AddEndpointsApiExplorer();
@@ -123,18 +105,18 @@ builder.Services.AddSwaggerGen(options =>
                     Id = "Bearer"
                 }
             },
-            new string[] {}
+            Array.Empty<string>()
         }
     });
 });
 
-// -------------------- Auth Service --------------------
-// Use Scoped because DbContext is scoped
+
+// -------------------- App Services --------------------
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<ICartService,CartService>();
-// Add this line with your other service registrations
+builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IWishlistService, WishlistService>();
+
 
 //////////////////////////////////////////////////////
 // 2️⃣ BUILD APP
@@ -142,35 +124,32 @@ builder.Services.AddScoped<IWishlistService, WishlistService>();
 var app = builder.Build();
 
 //////////////////////////////////////////////////////
-// 3️⃣ MIDDLEWARE PIPELINE (ORDER MATTERS!)
+// 3️⃣ MIDDLEWARE PIPELINE
 //////////////////////////////////////////////////////
 
-    app.UseSwagger();
-    app.UseSwaggerUI();
-
+// Swagger (OK to keep always-on for now)
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
-
-// Serve profile images
 app.UseStaticFiles();
 
-// CORS
 app.UseCors("AngularPolicy");
 
-// ✅ Authentication MUST come BEFORE Authorization
+// Authentication BEFORE Authorization
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Map controllers
 app.MapControllers();
 
 //////////////////////////////////////////////////////
-// 4️⃣ RUN
+// 4️⃣ MIGRATIONS + RUN
 //////////////////////////////////////////////////////
-//
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 }
+
 app.Run();
