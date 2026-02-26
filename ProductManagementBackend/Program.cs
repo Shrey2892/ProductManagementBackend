@@ -22,17 +22,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseMySql(
         connectionString,
-        ServerVersion.AutoDetect(connectionString),
+        new MySqlServerVersion(new Version(8, 0, 36)), // ✅ HARD CODED
         mySqlOptions =>
         {
             mySqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
+                maxRetryCount: 10,
                 maxRetryDelay: TimeSpan.FromSeconds(30),
                 errorNumbersToAdd: null
             );
         });
 });
-
 // -------------------- JWT --------------------
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 
@@ -138,8 +137,16 @@ app.MapControllers();
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("⚠️ Database not ready yet. Skipping migration.");
+        Console.WriteLine(ex.Message);
+    }
 }
 
 app.Run();
